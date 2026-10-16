@@ -1,0 +1,15 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "nanobind>=2.0"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "model0"
+version = "0.1.0"
+description = "Simple C++ model exposed to Python via nanobind"
+requires-python = ">=3.10"
+dependencies = ["numpy", "pydantic>=2"]
+
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+build-dir = "build/{wheel_tag}"
+wheel.packages = ["python/model0"]
