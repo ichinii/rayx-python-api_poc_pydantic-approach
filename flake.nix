@@ -54,6 +54,16 @@
               pip
             ]))
           ];
+
+          # Editable install into a venv, so `python example/main.py` just works.
+          # scikit-build-core recompiles the C++ on import when sources change.
+          shellHook = ''
+            if [ ! -d .venv ]; then
+              python -m venv --system-site-packages .venv
+              .venv/bin/pip install --no-build-isolation -e . >/dev/null
+            fi
+            source .venv/bin/activate
+          '';
         };
       });
     };

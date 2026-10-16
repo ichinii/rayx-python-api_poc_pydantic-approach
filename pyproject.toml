@@ -13,3 +13,4 @@ dependencies = ["numpy", "pydantic>=2"]
 minimum-version = "build-system.requires"
 build-dir = "build/{wheel_tag}"
 wheel.packages = ["python/model0"]
+editable.rebuild = true
