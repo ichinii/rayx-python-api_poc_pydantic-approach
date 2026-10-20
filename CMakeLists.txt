@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.26)
-project(model0 LANGUAGES CXX)
+project(rayx LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,8 +13,8 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE nanobind_ROOT)
 find_package(nanobind CONFIG REQUIRED)
 
-nanobind_add_module(model0 cpp/nanobind.cpp)
-target_link_libraries(model0 PRIVATE glm::glm)
+nanobind_add_module(_model0 cpp/nanobind.cpp)
+target_link_libraries(_model0 PRIVATE glm::glm)
 
 # The shared object lands inside the python package.
-install(TARGETS model0 LIBRARY DESTINATION model0)
+install(TARGETS _model0 LIBRARY DESTINATION rayx)

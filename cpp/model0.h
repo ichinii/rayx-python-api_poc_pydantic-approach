@@ -39,42 +39,43 @@ enum class EventType {
     TooManyEvents = 6,
 };
 
-//    name               flag               type
+//    snake                upper_snake          camel              pascal             type
 #define RAYX_RAY_ATTRS(X) \
-    X(pathId,            PathId,            uint64_t) \
-    X(pathEventId,       PathEventId,       uint32_t) \
-    X(positionX,         PositionX,         double) \
-    X(positionY,         PositionY,         double) \
-    X(positionZ,         PositionZ,         double) \
-    X(directionX,        DirectionX,        double) \
-    X(directionY,        DirectionY,        double) \
-    X(directionZ,        DirectionZ,        double) \
-    X(electricFieldX,    ElectricFieldX,    std::complex<double>) \
-    X(electricFieldY,    ElectricFieldY,    std::complex<double>) \
-    X(electricFieldZ,    ElectricFieldZ,    std::complex<double>) \
-    X(opticalPathLength, OpticalPathLength, double) \
-    X(energy,            Energy,            double) \
-    X(order,             Order,             int32_t) \
-    X(objectId,          ObjectId,          int32_t) \
-    X(sourceId,          SourceId,          int32_t) \
-    X(eventType,         EventType,         EventType) \
-    X(randCounter,       RandCounter,       RandCounter)
+    X(path_id,             PATH_ID,             pathId,            PathId,            uint64_t) \
+    X(path_event_id,       PATH_EVENT_ID,       pathEventId,       PathEventId,       uint32_t) \
+    X(position_x,          POSITION_X,          positionX,         PositionX,         double) \
+    X(position_y,          POSITION_Y,          positionY,         PositionY,         double) \
+    X(position_z,          POSITION_Z,          positionZ,         PositionZ,         double) \
+    X(direction_x,         DIRECTION_X,         directionX,        DirectionX,        double) \
+    X(direction_y,         DIRECTION_Y,         directionY,        DirectionY,        double) \
+    X(direction_z,         DIRECTION_Z,         directionZ,        DirectionZ,        double) \
+    X(electric_field_x,    ELECTRIC_FIELD_X,    electricFieldX,    ElectricFieldX,    std::complex<double>) \
+    X(electric_field_y,    ELECTRIC_FIELD_Y,    electricFieldY,    ElectricFieldY,    std::complex<double>) \
+    X(electric_field_z,    ELECTRIC_FIELD_Z,    electricFieldZ,    ElectricFieldZ,    std::complex<double>) \
+    X(optical_path_length, OPTICAL_PATH_LENGTH, opticalPathLength, OpticalPathLength, double) \
+    X(energy,              ENERGY,              energy,            Energy,            double) \
+    X(order,               ORDER,               order,             Order,             int32_t) \
+    X(object_id,           OBJECT_ID,           objectId,          ObjectId,          int32_t) \
+    X(source_id,           SOURCE_ID,           sourceId,          SourceId,          int32_t) \
+    X(event_type,          EVENT_TYPE,          eventType,         EventType,         EventType) \
+    X(rand_counter,        RAND_COUNTER,        randCounter,       RandCounter,       RandCounter)
 
 enum class RayAttr {
-#define X(name, flag, type) flag,
+#define X(snake, upper_snake, camel, pascal, type) pascal,
     RAYX_RAY_ATTRS(X)
 #undef X
     Count,
 };
 
+// we use upper_snake case here, because it is coherent with python. in case there are string to mask conversions, the user will encoutner coherent names. the camel case and pascal case are only used in the C++ code, where they are more idiomatic.
 inline constexpr std::array<std::string_view, static_cast<size_t>(RayAttr::Count)> rayAttrNames = {
-#define X(name, flag, type) #flag,
+#define X(snake, upper_snake, camel, pascal, type) #upper_snake,
     RAYX_RAY_ATTRS(X)
 #undef X
 };
 
 enum class RayAttrMask : uint32_t {
-#define X(name, flag, type) flag = 1 << static_cast<uint32_t>(RayAttr::flag),
+#define X(snake, upper_snake, camel, pascal, type) pascal = 1 << static_cast<uint32_t>(RayAttr::pascal),
     RAYX_RAY_ATTRS(X)
 #undef X
     Position      = PositionX | PositionY | PositionZ,
@@ -106,7 +107,7 @@ inline constexpr RayAttrMask toMask(const RayAttr attr) {
 }
 
 struct Rays {
-#define X(name, flag, type) std::vector<type> name;
+#define X(snake, upper_snake, camel, pascal, type) std::vector<type> camel;
     RAYX_RAY_ATTRS(X)
 #undef X
 };
@@ -515,4 +516,6 @@ struct TraceParams {
     std::optional<int> maxBatchSize;
 };
 
-Rays trace(const Beamline& beamline, const TraceParams& params);
+inline Rays trace(const Beamline& beamline, const TraceParams& params) {
+    return Rays{}; // TODO: here is where we connect the internals
+}
