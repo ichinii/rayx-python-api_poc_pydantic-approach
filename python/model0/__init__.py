@@ -1,4 +1,3 @@
-from ._core import Model
-from .sim import Particle, simulate
+from .model0 import RectangularArea
 
-__all__ = ["Model", "Particle", "simulate"]
+__all__ = ["RectangularArea"]

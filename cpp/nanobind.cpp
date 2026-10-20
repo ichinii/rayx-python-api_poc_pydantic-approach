@@ -4,27 +4,37 @@
 
 #include <array>
 
-#include "model.h"
+#include "model0.h"
 
 namespace nb = nanobind;
 
-using Vec3 = std::array<float, 3>;
+using Vec3 = std::array<double, 3>;
+using Mat4 = std::array<std::array<double, 4>, 4>;
 
-static Vec3 to_tuple(const glm::vec3& v) { return {v.x, v.y, v.z}; }
-static glm::vec3 from_tuple(const Vec3& v) { return {v[0], v[1], v[2]}; }
+static Vec3 to_tuple(const glm::dvec3& v) { return {v.x, v.y, v.z}; }
+static glm::dvec3 from_tuple(const Vec3& v) { return {v[0], v[1], v[2]}; }
 
-NB_MODULE(_core, m) {
+static Mat4 to_tuple(const glm::dmat4& m) {
+    Mat4 result;
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j)
+            result[i][j] = m[i][j];
+    return result;
+}
+
+static glm::dmat4 from_tuple(const Mat4& m) {
+    glm::dmat4 result;
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j)
+            result[i][j] = m[i][j];
+    return result;
+}
+
+NB_MODULE(model0, m) {
     m.doc() = "C++ core of the model0 package";
 
-    nb::class_<Model>(m, "Model")
+    nb::class_<RectangularArea>(m, "RectangularArea")
         .def(nb::init<>())
-        .def_rw("name", &Model::name)
-        .def_prop_rw("position",
-                     [](const Model& s) { return to_tuple(s.position); },
-                     [](Model& s, const Vec3& v) { s.position = from_tuple(v); })
-        .def_prop_rw("velocity",
-                     [](const Model& s) { return to_tuple(s.velocity); },
-                     [](Model& s, const Vec3& v) { s.velocity = from_tuple(v); })
-        .def("step", &Model::step, nb::arg("dt"))
-        .def("speed", &Model::speed);
+        .def_rw("width", &RectangularArea::width)
+        .def_rw("height", &RectangularArea::height);
 }
