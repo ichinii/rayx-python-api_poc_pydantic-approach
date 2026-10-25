@@ -1,4 +1,5 @@
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 #include <nanobind/stl/array.h>
 #include <nanobind/stl/complex.h>
 #include <nanobind/stl/optional.h>
@@ -7,11 +8,47 @@
 #include <nanobind/stl/vector.h>
 
 #include <array>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 #include "model0.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
+
+//////////////////////////////////////////////////////////////
+// ray columns as numpy arrays
+//////////////////////////////////////////////////////////////
+
+// `EventType` has no numpy dtype of its own, so it is viewed as its underlying integer.
+// The member is deliberately not called `type`: `RAYX_RAY_ATTRS` names its last macro
+// parameter `type`, which would be substituted after the `::` as well.
+template <typename T>
+struct NumpyScalar {
+    using Scalar = T;
+};
+template <>
+struct NumpyScalar<EventType> {
+    using Scalar = std::underlying_type_t<EventType>;
+};
+
+// `trace` returns `Rays` by value, so ownership of every column passes to python. Each
+// vector is moved onto the heap and handed to a capsule, which makes numpy the owner of
+// that buffer: the array is a writable view with no copy, and keeping one column alive
+// does not pin the other seventeen.
+//
+// Passing an owner is exactly what selects the non-copying path, see `ndarray_export` in
+// nanobind: without one it silently *copies* rather than failing. Note that an owner
+// cannot be combined with `rv_policy::reference_internal`, which raises at runtime; the
+// default policy is what we want here.
+template <typename Scalar, typename T>
+nb::object toArray(std::vector<T>&& vec) {
+    using Owned = std::vector<T>;
+    auto* owned = new Owned(std::move(vec));
+    nb::capsule owner(owned, [](void* p) noexcept { delete static_cast<Owned*>(p); });
+    return nb::cast(nb::ndarray<nb::numpy, Scalar>(reinterpret_cast<Scalar*>(owned->data()), {owned->size()}, owner));
+}
 
 //////////////////////////////////////////////////////////////
 // glm interop
@@ -54,11 +91,11 @@ struct type_caster<glm::dmat4> {
 NB_MODULE(_model0, m) {
     m.doc() = "C++ core of the rayx package";
 
-    //////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////
     // rays
-    //////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////
 
-    nb::enum_<EventType>(m, "EventType")
+    nb::enum_<EventType>(m, "EventType", nb::is_arithmetic())
         .value("UNINITIALIZED", EventType::Uninitialized)
         .value("EMITTED", EventType::Emitted)
         .value("HIT_ELEMENT", EventType::HitElement)
@@ -71,41 +108,33 @@ NB_MODULE(_model0, m) {
 #define X(snake, upper_snake, camel, pascal, type) .value(#upper_snake, RayAttrMask::pascal)
         RAYX_RAY_ATTRS(X)
 #undef X
-        .value("POSITION", RayAttrMask::Position)
-        .value("DIRECTION", RayAttrMask::Direction)
-        .value("ELECTRIC_FIELD", RayAttrMask::ElectricField)
-        .value("EMPTY", RayAttrMask::Empty)
-        .value("ALL", RayAttrMask::All);
+            .value("POSITION", RayAttrMask::Position)
+            .value("DIRECTION", RayAttrMask::Direction)
+            .value("LOCAL_ELECTRIC_FIELD", RayAttrMask::LocalElectricField)
+            .value("EMPTY", RayAttrMask::Empty)
+            .value("ALL", RayAttrMask::All);
 
-    nb::class_<Rays>(m, "Rays")
-        .def(nb::init<>())
-#define X(snake, upper_snake, camel, pascal, type) .def_rw(#snake, &Rays::camel)
-        RAYX_RAY_ATTRS(X)
-#undef X
-        ;
-
-    //////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////
     // element building blocks
-    //////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////
 
-    nb::class_<RectangularArea>(m, "RectangularArea")
+    nb::class_<RectArea>(m, "RectArea")
         .def(nb::init<>())
-        .def_rw("width", &RectangularArea::width)
-        .def_rw("height", &RectangularArea::height);
+        .def_rw("width", &RectArea::width)
+        .def_rw("height", &RectArea::height);
 
-    nb::class_<EllipticalArea>(m, "EllipticalArea")
+    nb::class_<EllipseArea>(m, "EllipseArea")
         .def(nb::init<>())
-        .def_rw("horizontal_diameter", &EllipticalArea::horizontalDiameter)
-        .def_rw("vertical_diameter", &EllipticalArea::verticalDiameter);
+        .def_rw("horizontal_diameter", &EllipseArea::horizontalDiameter)
+        .def_rw("vertical_diameter", &EllipseArea::verticalDiameter);
 
-    nb::class_<TrapezoidalArea>(m, "TrapezoidalArea")
+    nb::class_<TrapezoidArea>(m, "TrapezoidArea")
         .def(nb::init<>())
-        .def_rw("top_width", &TrapezoidalArea::topWidth)
-        .def_rw("bottom_width", &TrapezoidalArea::bottomWidth)
-        .def_rw("height", &TrapezoidalArea::height);
+        .def_rw("top_width", &TrapezoidArea::topWidth)
+        .def_rw("bottom_width", &TrapezoidArea::bottomWidth)
+        .def_rw("height", &TrapezoidArea::height);
 
-    nb::class_<FlatCurvature>(m, "FlatCurvature")
-        .def(nb::init<>());
+    nb::class_<FlatCurvature>(m, "FlatCurvature").def(nb::init<>());
 
     nb::class_<QuadricCurvature>(m, "QuadricCurvature")
         .def(nb::init<>())
@@ -121,9 +150,7 @@ NB_MODULE(_model0, m) {
         .def_rw("a34", &QuadricCurvature::a34)
         .def_rw("a44", &QuadricCurvature::a44);
 
-    nb::enum_<ToroidType>(m, "ToroidType")
-        .value("CONVEX", ToroidType::Convex)
-        .value("CONCAVE", ToroidType::Concave);
+    nb::enum_<ToroidType>(m, "ToroidType").value("CONVEX", ToroidType::Convex).value("CONCAVE", ToroidType::Concave);
 
     nb::class_<ToroidialCurvature>(m, "ToroidialCurvature")
         .def(nb::init<>())
@@ -162,13 +189,11 @@ NB_MODULE(_model0, m) {
         .def_rw("thickness", &CoatingLayer::thickness)
         .def_rw("roughness", &CoatingLayer::roughness);
 
-    nb::class_<Coating>(m, "Coating")
-        .def(nb::init<>())
-        .def_rw("layers", &Coating::layers);
+    nb::class_<Coating>(m, "Coating").def(nb::init<>()).def_rw("layers", &Coating::layers);
 
-    //////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////
     // elements
-    //////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////
 
     nb::class_<Detector>(m, "Detector")
         .def(nb::init<>())
@@ -240,25 +265,25 @@ NB_MODULE(_model0, m) {
         .def_rw("design_alpha_angle", &Rzp::designAlphaAngle)
         .def_rw("design_beta_angle", &Rzp::designBetaAngle);
 
-    nb::class_<Cystal>(m, "Cystal")
+    nb::class_<Crystal>(m, "Crystal")
         .def(nb::init<>())
-        .def_rw("global_transform", &Cystal::globalTransform)
-        .def_rw("area", &Cystal::area)
-        .def_rw("curvature", &Cystal::curvature)
-        .def_rw("slope_error", &Cystal::slopeError)
-        .def_rw("d_spacing2", &Cystal::dSpacing2)
-        .def_rw("unit_cell_volume", &Cystal::unitCellVolume)
-        .def_rw("offset_angle", &Cystal::offsetAngle)
-        .def_rw("structure_factor_re_f0", &Cystal::structureFactorReF0)
-        .def_rw("structure_factor_im_f0", &Cystal::structureFactorImF0)
-        .def_rw("structure_factor_re_fh", &Cystal::structureFactorReFH)
-        .def_rw("structure_factor_im_fh", &Cystal::structureFactorImFH)
-        .def_rw("structure_factor_re_fhc", &Cystal::structureFactorReFHC)
-        .def_rw("structure_factor_im_fhc", &Cystal::structureFactorImFHC);
+        .def_rw("global_transform", &Crystal::globalTransform)
+        .def_rw("area", &Crystal::area)
+        .def_rw("curvature", &Crystal::curvature)
+        .def_rw("slope_error", &Crystal::slopeError)
+        .def_rw("d_spacing2", &Crystal::dSpacing2)
+        .def_rw("unit_cell_volume", &Crystal::unitCellVolume)
+        .def_rw("offset_angle", &Crystal::offsetAngle)
+        .def_rw("structure_factor_re_f0", &Crystal::structureFactorReF0)
+        .def_rw("structure_factor_im_f0", &Crystal::structureFactorImF0)
+        .def_rw("structure_factor_re_fh", &Crystal::structureFactorReFH)
+        .def_rw("structure_factor_im_fh", &Crystal::structureFactorImFH)
+        .def_rw("structure_factor_re_fhc", &Crystal::structureFactorReFHC)
+        .def_rw("structure_factor_im_fhc", &Crystal::structureFactorImFHC);
 
-    //////////////////////////////////////////////////////////
-    // distributions
-    //////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////
+    // source building blocks
+    //////////////////////////////////////////////////////////////
 
     nb::class_<DiscreteUniformDistribution>(m, "DiscreteUniformDistribution")
         .def(nb::init<>())
@@ -281,20 +306,9 @@ NB_MODULE(_model0, m) {
         .def_rw("values", &BakedDistribution::values)
         .def_rw("weights", &BakedDistribution::weights);
 
-    nb::class_<Distribution2>(m, "Distribution2")
-        .def(nb::init<>())
-        .def_rw("horizontal", &Distribution2::horizontal)
-        .def_rw("vertical", &Distribution2::vertical);
-
-    nb::class_<Distribution3>(m, "Distribution3")
-        .def(nb::init<>())
-        .def_rw("horizontal", &Distribution3::horizontal)
-        .def_rw("vertical", &Distribution3::vertical)
-        .def_rw("depth", &Distribution3::depth);
-
-    //////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////
     // sources
-    //////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////
 
     nb::class_<PointSource>(m, "PointSource")
         .def(nb::init<>())
@@ -374,13 +388,15 @@ NB_MODULE(_model0, m) {
         .def_rw("energy_spread", &DipoleSource::energySpread)
         .def_rw("horizontal_divergence", &DipoleSource::horizontalDivergence);
 
-    //////////////////////////////////////////////////////////
-    // beamline and tracing
-    //////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////
+    // beamline
+    //////////////////////////////////////////////////////////////
 
-    nb::class_<Beamline>(m, "Beamline")
-        .def(nb::init<>())
-        .def_rw("objects", &Beamline::objects);
+    nb::class_<Beamline>(m, "Beamline").def(nb::init<>()).def_rw("objects", &Beamline::objects);
+
+    //////////////////////////////////////////////////////////////
+    // tracing
+    //////////////////////////////////////////////////////////////
 
     nb::class_<TraceParams>(m, "TraceParams")
         .def(nb::init<>())
@@ -391,5 +407,15 @@ NB_MODULE(_model0, m) {
         .def_rw("max_events", &TraceParams::maxEvents)
         .def_rw("max_batch_size", &TraceParams::maxBatchSize);
 
-    m.def("trace", &trace, "beamline"_a, "params"_a, "Trace a beamline and return the recorded rays");
+    m.def(
+        "trace",
+        [](const Beamline& beamline, const TraceParams& params) {
+            Rays rays = trace(beamline, params);
+            nb::dict columns;
+#define X(snake, upper_snake, camel, pascal, type) columns[#snake] = toArray<NumpyScalar<type>::Scalar>(std::move(rays.camel));
+            RAYX_RAY_ATTRS(X)
+#undef X
+            return columns;
+        },
+        "beamline"_a, "params"_a, "Trace a beamline and return the recorded ray columns as numpy arrays");
 }

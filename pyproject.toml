@@ -7,7 +7,7 @@ name = "rayx"
 version = "0.1.0"
 description = "Simple C++ model exposed to Python via nanobind"
 requires-python = ">=3.10"
-dependencies = ["numpy", "pydantic>=2"]
+dependencies = ["numpy", "pydantic>=2", "typing-extensions>=4.6"]
 
 [tool.scikit-build]
 minimum-version = "build-system.requires"

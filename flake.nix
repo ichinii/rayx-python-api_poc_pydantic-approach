@@ -23,7 +23,7 @@
           buildInputs = [ pkgs.glm ];
 
           build-system = with pkgs.python3Packages; [ scikit-build-core nanobind ];
-          dependencies = with pkgs.python3Packages; [ numpy pydantic ];
+          dependencies = with pkgs.python3Packages; [ numpy pydantic typing-extensions ];
 
           pythonImportsCheck = [ "rayx" ];
         };
@@ -49,6 +49,7 @@
             (pkgs.python3.withPackages (ps: with ps; [
               numpy
               pydantic
+              typing-extensions
               nanobind
               scikit-build-core
               pip
